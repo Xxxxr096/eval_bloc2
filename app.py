@@ -37,6 +37,7 @@ def load_or_fallback():
     crm_path = Path("crm_smartmarket.xlsx")
     camp_path = Path("campaign_smartmarket.json")
 
+    # cas 1 : on a bien les fichiers
     if leads_path.exists() and crm_path.exists() and camp_path.exists():
         leads = pd.read_csv(leads_path)
         crm = pd.read_excel(crm_path)
@@ -44,7 +45,7 @@ def load_or_fallback():
             campaigns = pd.DataFrame(json.load(f))
         source = "Fichiers locaux chargés"
     else:
-
+        # cas 2 : on les a pas
         leads = pd.DataFrame(
             [
                 {
@@ -156,7 +157,7 @@ def load_or_fallback():
         )
         source = "Fallback (données de l’énoncé)"
 
-    # Types & nettoyage léger
+    # Petit nettoyages
     leads["date"] = pd.to_datetime(leads["date"], errors="coerce")
     leads["lead_id"] = pd.to_numeric(leads["lead_id"], errors="coerce").astype("Int64")
     crm["lead_id"] = pd.to_numeric(crm["lead_id"], errors="coerce").astype("Int64")
@@ -188,24 +189,27 @@ def plot_bar(x, y, title, ylabel, rotate=25):
     return fig
 
 
+# Chargement des données
 leads, crm, campaigns, source = load_or_fallback()
 st.caption(f"Source des données : **{source}**")
 
-
+# Jointure leads + CRM sur lead_id
 df_leads = leads.merge(crm, on="lead_id", how="left", validate="one_to_one")
 
-
+# Filtrage du périmetre
 period_start = pd.Timestamp("2025-09-01")
 period_end = pd.Timestamp("2025-09-30")
 df_leads = df_leads[
     (df_leads["date"] >= period_start) & (df_leads["date"] <= period_end)
 ].copy()
 
-
+# Calcule des KPI campagnes
 df_camp = compute_campaign_kpis(campaigns)
 
-
+# Filtres
 st.sidebar.header("Filtres")
+
+# On propose des filtre simple
 all_channels = sorted(df_leads["channel"].dropna().unique().tolist())
 sel_channels = st.sidebar.multiselect("Canaux", all_channels, default=all_channels)
 
@@ -218,6 +222,7 @@ sel_status = st.sidebar.multiselect("Statuts", all_status, default=all_status)
 all_devices = sorted(df_leads["device"].dropna().unique().tolist())
 sel_devices = st.sidebar.multiselect("Devices", all_devices, default=all_devices)
 
+# Application des filtre sur les leads + CRM
 df_leads_f = df_leads[
     df_leads["channel"].isin(sel_channels)
     & df_leads["region"].isin(sel_regions)
@@ -225,8 +230,10 @@ df_leads_f = df_leads[
     & df_leads["device"].isin(sel_devices)
 ].copy()
 
+# Les compagne sont filtrer au minimum par canal
 df_camp_f = df_camp[df_camp["channel"].isin(sel_channels)].copy()
 
+# Calcule du nombre de leads par canal
 leads_by_channel = (
     df_leads_f.groupby("channel", dropna=False)["lead_id"]
     .nunique()
@@ -240,14 +247,14 @@ df_camp_f["cpl_indicatif"] = df_camp_f.apply(
     lambda r: safe_div(r["cost"], r["leads"]), axis=1
 )
 
-
+# Titre
 st.title("SmartMarket — Dashboard Marketing (Septembre 2025)")
 st.write(
     "Tableau de bord de synthèse : performance par canal (CTR, conversion, coûts) "
     "et lecture qualitative via les statuts CRM / régions."
 )
 
-
+# KPI globaux
 total_cost = df_camp_f["cost"].sum()
 total_impr = df_camp_f["impressions"].sum()
 total_clicks = df_camp_f["clicks"].sum()
@@ -260,6 +267,7 @@ cpa_global = safe_div(total_cost, total_conv)
 total_leads = df_leads_f["lead_id"].nunique()
 cpl_global_indicatif = safe_div(total_cost, total_leads)
 
+# Ligne de 6 cartes KPI
 k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Budget total", eur(total_cost))
 k2.metric("Leads (périmètre)", f"{total_leads}")
@@ -280,6 +288,7 @@ st.caption(
 
 st.divider()
 
+# Graphique principaux
 left, right = st.columns(2)
 
 
@@ -349,6 +358,7 @@ with right2:
 
 st.divider()
 
+# Table de détail
 
 with st.expander("Détails KPI par canal (table)"):
     out = df_camp_f.copy()
