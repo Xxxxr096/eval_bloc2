@@ -10,9 +10,6 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="SmartMarket - Marketing Dashboard", layout="wide")
 
 
-# -----------------------------
-# Helpers
-# -----------------------------
 def pct(x):
     return f"{x*100:.2f}%"
 
